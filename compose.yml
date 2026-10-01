@@ -73,6 +73,7 @@ services:
 
   vikunja:
     image: vikunja/vikunja:latest
+    user: "0:0"
     depends_on:
       vikunja-mariadb:
         condition: service_healthy
@@ -84,10 +85,12 @@ services:
       VIKUNJA_DATABASE_DATABASE: vikunja
       VIKUNJA_DATABASE_USER: vikunja
       VIKUNJA_DATABASE_PASSWORD: ${VIKUNJA_DB_PASSWORD:-vikunja_db_secret_change_me}
+      VIKUNJA_SERVICE_SECRET: ${VIKUNJA_JWT_SECRET:-vikunja_jwt_secret_change_me_long_random}
       VIKUNJA_SERVICE_JWTSECRET: ${VIKUNJA_JWT_SECRET:-vikunja_jwt_secret_change_me_long_random}
       VIKUNJA_SERVICE_ENABLEREGISTRATION: "true"
     volumes:
       - vikunja_files:/app/vikunja/files
+
     ports:
       - "3456:3456"
     restart: unless-stopped
