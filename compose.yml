@@ -59,7 +59,7 @@ services:
     volumes:
       - vikunja_db_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD-SHELL", "healthcheck.sh --connect --innodb_initialized"]
+      test: [ "CMD-SHELL", "healthcheck.sh --connect --innodb_initialized" ]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -72,7 +72,7 @@ services:
       vikunja-mariadb:
         condition: service_healthy
     environment:
-      VIKUNJA_SERVICE_PUBLICURL: ${VIKUNJA_PUBLIC_URL:-http://localhost:3456/}
+      VIKUNJA_SERVICE_PUBLICURL: ${VIKUNJA_PUBLIC_URL:-http://192.168.1.46:3456/}
       VIKUNJA_DATABASE_TYPE: mysql
       VIKUNJA_DATABASE_HOST: vikunja-mariadb
       VIKUNJA_DATABASE_PORT: 3306
@@ -100,7 +100,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       APACHE_PORT: "11000"
-      APACHE_IP_BINDING: "127.0.0.1"
+      APACHE_IP_BINDING: "192.168.1.46"
       SKIP_DOMAIN_VALIDATION: "true"
     ports:
       - "8080:8080"
@@ -112,6 +112,3 @@ volumes:
   vikunja_files:
   nextcloud_aio_mastercontainer:
     external: true
-
-
-
