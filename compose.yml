@@ -52,12 +52,17 @@ services:
   vikunja-mariadb:
     image: mariadb:11
     environment:
+      MARIADB_ROOT_PASSWORD: ${VIKUNJA_DB_ROOT_PASSWORD:-vikunja_root_secret_change_me}
       MYSQL_ROOT_PASSWORD: ${VIKUNJA_DB_ROOT_PASSWORD:-vikunja_root_secret_change_me}
+      MARIADB_DATABASE: vikunja
       MYSQL_DATABASE: vikunja
+      MARIADB_USER: vikunja
       MYSQL_USER: vikunja
+      MARIADB_PASSWORD: ${VIKUNJA_DB_PASSWORD:-vikunja_db_secret_change_me}
       MYSQL_PASSWORD: ${VIKUNJA_DB_PASSWORD:-vikunja_db_secret_change_me}
     volumes:
       - vikunja_db_data:/var/lib/mysql
+
     healthcheck:
       test: [ "CMD-SHELL", "healthcheck.sh --connect --innodb_initialized" ]
       interval: 5s
