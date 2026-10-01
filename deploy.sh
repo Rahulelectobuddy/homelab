@@ -3,7 +3,7 @@ set -euo pipefail
 cd /opt/homelab
 
 echo "==> Validating compose"
-docker compose config -q
+docker compose config > /dev/null
 
 echo "==> Pulling images"
 docker compose pull
