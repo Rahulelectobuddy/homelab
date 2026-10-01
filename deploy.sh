@@ -3,13 +3,14 @@ set -euo pipefail
 cd /opt/homelab
 
 echo "==> Validating compose"
-docker compose config > /dev/null
+docker-compose config > /dev/null
 
 echo "==> Pulling images"
-docker compose pull
+docker-compose pull
 
 echo "==> Starting services"
-docker compose up -d --remove-orphans
+docker-compose up -d --remove-orphans
 
 echo "==> Status"
-docker compose ps
+docker-compose ps
+
