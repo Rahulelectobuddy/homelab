@@ -119,6 +119,8 @@ volumes:
   vikunja_db_data:
   vikunja_files:
   nextcloud_aio_mastercontainer:
+    name: nextcloud_aio_mastercontainer
+
 
 
 
