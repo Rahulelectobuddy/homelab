@@ -11,10 +11,11 @@ services:
     volumes:
       - n8n_db_data:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U n8n -d n8n" ]
-      interval: 10s
+      test: [ "CMD-SHELL", "pg_isready -h 127.0.0.1 -U n8n -d n8n" ]
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 30s
     restart: unless-stopped
 
   n8n:
@@ -57,12 +58,19 @@ services:
       MYSQL_PASSWORD: ${VIKUNJA_DB_PASSWORD}
     volumes:
       - vikunja_db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "healthcheck.sh --connect --innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
     restart: unless-stopped
 
   vikunja:
     image: vikunja/vikunja:latest
     depends_on:
-      - vikunja-mariadb
+      vikunja-mariadb:
+        condition: service_healthy
     environment:
       VIKUNJA_SERVICE_PUBLICURL: ${VIKUNJA_PUBLIC_URL}
       VIKUNJA_DATABASE_TYPE: mysql
@@ -78,6 +86,7 @@ services:
     ports:
       - "3456:3456"
     restart: unless-stopped
+
 
   # =========================
   # Nextcloud AIO
