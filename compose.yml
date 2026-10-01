@@ -119,6 +119,6 @@ volumes:
   vikunja_db_data:
   vikunja_files:
   nextcloud_aio_mastercontainer:
-    external: true
+
 
 
