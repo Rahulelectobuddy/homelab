@@ -20,10 +20,10 @@ fi
 echo "==> Backing up databases (logical dumps)"
 
 echo "--> n8n PostgreSQL"
-docker-compose exec -T n8n-postgres pg_dump -U n8n -d n8n | gzip > "$DUMP_DIR/n8n.sql.gz"
+docker compose exec -T n8n-postgres pg_dump -U n8n -d n8n | gzip > "$DUMP_DIR/n8n.sql.gz"
 
 echo "--> Vikunja MariaDB"
-docker-compose exec -T vikunja-mariadb sh -c \
+docker compose exec -T vikunja-mariadb sh -c \
   'mariadb-dump -u root -p"$MYSQL_ROOT_PASSWORD" --single-transaction vikunja' \
   | gzip > "$DUMP_DIR/vikunja.sql.gz"
 
@@ -38,7 +38,7 @@ VOLUMES=(
 )
 
 # Resolve project volume name prefix
-COMPOSE_PROJECT_NAME=$(docker-compose config --format json 2>/dev/null | grep -o '"name":"[^"]*"' | head -n1 | cut -d'"' -f4 || echo "homelab")
+COMPOSE_PROJECT_NAME=$(docker compose config --format json 2>/dev/null | grep -o '"name":"[^"]*"' | head -n1 | cut -d'"' -f4 || echo "homelab")
 
 for vol in "${VOLUMES[@]}"; do
   FULL_VOL_NAME="${COMPOSE_PROJECT_NAME}_${vol}"
@@ -70,6 +70,7 @@ if [ -n "${RESTIC_REPOSITORY:-}" ] && [ -n "${RESTIC_PASSWORD_FILE:-}" ]; then
 fi
 
 echo "==> Backup completed successfully: $DATE"
+
 
 
 

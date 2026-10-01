@@ -17,7 +17,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Validate Compose
-        run: docker-compose config > /dev/null
+        run: docker compose config > /dev/null
 
       - name: Sync desired state
         run: rsync -a --delete --exclude '.env' --exclude '.git' ./ /opt/homelab/

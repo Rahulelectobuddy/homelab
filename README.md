@@ -20,11 +20,12 @@ cp .env.example .env
 chmod 600 .env
 nano .env
 
-docker-compose config
-docker-compose pull
-docker-compose up -d
-docker-compose ps
+docker compose config
+docker compose pull
+docker compose up -d
+docker compose ps
 ```
+
 
 
 ## Backup & Restoration
