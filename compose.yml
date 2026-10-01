@@ -108,7 +108,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       APACHE_PORT: "11000"
-      APACHE_IP_BINDING: "192.168.1.46"
+      APACHE_IP_BINDING: "0.0.0.0"
       SKIP_DOMAIN_VALIDATION: "true"
     ports:
       - "8080:8080"
