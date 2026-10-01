@@ -29,13 +29,17 @@ docker-compose ps
 
 ## Backup & Restoration
 
-- **Backups (`backup.sh`)**:
+- **Nextcloud AIO (Built-in BorgBackup)**:
+  - Managed via Nextcloud AIO Web Interface (`https://<YOUR_SERVER_IP>:8080`).
+  - Safely stops child containers, performs an encrypted/deduplicated Borg snapshot of database & files, and restarts containers automatically.
+- **n8n & Vikunja (`backup.sh`)**:
   - Dumps PostgreSQL (`n8n-postgres`) & MariaDB (`vikunja-mariadb`).
-  - Archives all persistent Docker named volumes into portable tarballs (`$BACKUP_ROOT/$DATE/volumes/*.tgz`).
+  - Archives persistent Docker named volumes into portable tarballs (`$BACKUP_ROOT/$DATE/volumes/*.tgz`).
   - Supports optional off-host sync using Restic (`RESTIC_REPOSITORY`).
 - **Restoration**:
-  - Deploy the stack on any host.
-  - Extract volume archives or restore database dumps directly into containers.
-  - Stack functions out of the box immediately.
+  - Deploy the stack on any host using `docker-compose up -d`.
+  - Extract volume archives or restore database dumps for n8n and Vikunja.
+  - Nextcloud AIO is restored via the AIO Web Interface using your BorgBackup passphrase & archive path.
+
 
 
