@@ -1,0 +1,14 @@
+# secrets
+.env
+.env.*
+!.env.example
+
+# runtime / local state
+backups/
+logs/
+*.log
+.DS_Store
+
+# editor
+.vscode/
+.idea/

@@ -1,0 +1,26 @@
+name: Deploy Homelab
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: homelab-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, linux, x64]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Compose
+        run: docker compose config -q
+
+      - name: Sync desired state
+        run: rsync -a --delete --exclude '.env' --exclude '.git' ./ /opt/homelab/
+
+      - name: Deploy
+        run: /opt/homelab/deploy.sh
