@@ -113,6 +113,21 @@ services:
     ports:
       - "8080:8080"
 
+  # =========================
+  # Vaultwarden (Password Manager)
+  # =========================
+  vaultwarden:
+    image: vaultwarden/server:latest
+    container_name: vaultwarden
+    environment:
+      WEBSOCKET_ENABLED: "true"
+      ADMIN_TOKEN: ${VAULTWARDEN_ADMIN_TOKEN:-}
+    volumes:
+      - vaultwarden_data:/data
+    ports:
+      - "${VAULTWARDEN_PORT:-8088}:80"
+    restart: unless-stopped
+
 volumes:
   n8n_db_data:
   n8n_data:
@@ -120,6 +135,7 @@ volumes:
   vikunja_files:
   nextcloud_aio_mastercontainer:
     name: nextcloud_aio_mastercontainer
+  vaultwarden_data:
 
 
 

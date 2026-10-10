@@ -35,6 +35,7 @@ VOLUMES=(
   "vikunja_files"
   "vikunja_db_data"
   "nextcloud_aio_mastercontainer"
+  "vaultwarden_data"
 )
 
 # Resolve project volume name prefix
