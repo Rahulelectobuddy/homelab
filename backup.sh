@@ -28,6 +28,15 @@ docker compose exec -T vikunja-mariadb sh -c \
   | gzip > "$DUMP_DIR/vikunja.sql.gz"
 
 # Persistent Docker volume archives
+ZULIP_RUNNING=""
+if docker compose config --services | grep -qx zulip; then
+  ZULIP_RUNNING=$(docker compose ps --status running -q zulip)
+fi
+if [ -n "$ZULIP_RUNNING" ]; then
+  echo "--> Zulip PostgreSQL (dump into zulip_data/backups)"
+  docker compose exec -T zulip /sbin/entrypoint.sh app:backup
+fi
+
 echo "==> Backing up Docker persistent named volumes"
 VOLUMES=(
   "n8n_data"
@@ -36,6 +45,9 @@ VOLUMES=(
   "vikunja_db_data"
   "nextcloud_aio_mastercontainer"
   "vaultwarden_data"
+  # Includes uploads, configuration, certificates, secrets, and fresh DB dump.
+  # Do not archive the live Zulip PostgreSQL data directory.
+  "zulip_data"
 )
 
 # Resolve project volume name prefix
