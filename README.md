@@ -1,12 +1,12 @@
 # Homelab Infrastructure
 
-Single Docker Compose deployment for **Nextcloud AIO**, **Vikunja**, **n8n**, **Vaultwarden** (Bitwarden-compatible Password Manager), and **Zulip**.
+Single Docker Compose deployment for **Nextcloud AIO**, **Vikunja**, **n8n**, **Vaultwarden** (Bitwarden-compatible Password Manager), **Zulip**, and **SFTPGo** for Obsidian WebDAV sync.
 
 ## Design
 
 - **Git repository = desired state**: Docker Compose file, backup/deploy scripts, and documentation.
 - **`/opt/homelab/.env`**: Secret configuration for existing services (never committed). Zulip settings and generated credentials are inline in `compose.yml`, which must be kept private.
-- **Docker Named Volumes**: All persistent data is stored in isolated Docker named volumes (`n8n_data`, `n8n_db_data`, `vikunja_files`, `vikunja_db_data`, `nextcloud_aio_mastercontainer`, `vaultwarden_data`) without host-path dependencies.
+- **Docker Named Volumes**: All persistent data is stored in isolated Docker named volumes (`n8n_data`, `n8n_db_data`, `vikunja_files`, `vikunja_db_data`, `nextcloud_aio_mastercontainer`, `vaultwarden_data`, `sftpgo_data`, `sftpgo_config`) without host-path dependencies.
 - **Out-of-the-box Deployment**: Cloned repo + `.env` file works on any Docker host without pre-creating host directories.
 
 ## Deployment
@@ -32,7 +32,79 @@ docker compose ps
 - **Vikunja**: Port `3456`
 - **n8n**: Port `5678`
 - **Vaultwarden**: Port `8088`
+- **SFTPGo**: Admin `127.0.0.1:8089`, WebDAV `10080`, SFTP `2022`
 - **Zulip**: HTTP origin `127.0.0.1:8090`, public HTTPS via Cloudflare Tunnel
+
+## SFTPGo / Obsidian WebDAV setup
+
+SFTPGo uses the official `drakkan/sftpgo:v2.7.6` image. Its two named volumes
+persist across container recreation and normal `docker compose down` / `up`:
+
+- `sftpgo_data` mounted at `/srv/sftpgo`: vault files under `data/<username>` and application backups.
+- `sftpgo_config` mounted at `/var/lib/sftpgo`: SQLite database (users, admins, permissions), settings stored there, and SSH host keys.
+
+Keep the same Compose project name/directory on redeployment so Docker reuses
+these volumes. `docker compose down -v` deletes persistent data.
+See the official [Docker storage documentation](https://github.com/sftpgo/docs/blob/main/docs/docker.md).
+
+1. Start only the new service on your homelab host:
+
+   ```bash
+   cd /opt/homelab
+   docker compose config --quiet
+   docker compose pull sftpgo
+   docker compose up -d sftpgo
+   ```
+
+2. The admin UI defaults to host loopback. From your computer, forward it:
+
+   ```bash
+   ssh -N -L 8089:127.0.0.1:8089 <SSH_USER>@<SERVER_IP>
+   ```
+
+   Open `http://localhost:8089/web/admin`, create the first administrator, then
+   create a separate enabled user named `obsidian` with a strong password.
+   Use **Local filesystem**, home directory `/srv/sftpgo/data/obsidian`, and grant
+   list, download, upload, overwrite, create directories, rename, and delete
+   permissions at `/`. Ensure WebDAV is allowed for this user. Do not add file
+   filters that exclude dotfiles if you want to sync `.obsidian` settings.
+   The admin account is separate from the WebDAV user.
+
+3. In Obsidian, configure a WebDAV-capable plugin such as
+   [Remotely Save](https://github.com/remotely-save/remotely-save) on each device:
+
+   - Service: **WebDAV**.
+   - Server URL: `http://<SERVER_IP>:10080/` on a trusted LAN, or your HTTPS WebDAV hostname below.
+   - Username/password: the `obsidian` user credentials.
+   - Remote folder: a distinct folder for each vault, using the same folder on every device for that vault.
+
+   Run the plugin's connection check, sync one device first, then sync the others.
+   Back up your vault before the first sync. Obsidian's official paid Sync service
+   does not provide a WebDAV configuration; this setup uses a community plugin.
+   CORS is enabled for Obsidian desktop/mobile origins with WebDAV methods allowed.
+
+For remote access, use HTTPS through the host's existing Cloudflare Tunnel (or
+another TLS reverse proxy). Route a hostname you control to
+**`http://127.0.0.1:10080`**, and change the WebDAV port mapping in `compose.yml`
+to `127.0.0.1:10080:10080` if all clients will use the tunnel. For example,
+before the tunnel's catch-all rule:
+
+```yaml
+- hostname: <YOUR_WEBDAV_HOSTNAME>
+  service: http://127.0.0.1:10080
+```
+
+Configure the DNS route and use `https://<YOUR_WEBDAV_HOSTNAME>/` in the plugin.
+Pass through WebDAV methods and the `Authorization` header. Interactive browser
+login pages in front of WebDAV require compatible client authentication.
+The admin interface remains on loopback. Plain HTTP WebDAV sends credentials and
+notes without transport encryption, so use HTTPS outside a trusted LAN.
+SFTP is also available on port `2022` with the same file-user credentials.
+SFTPGo host ports and bind addresses are hardcoded in `compose.yml`.
+
+`backup.sh` briefly stops SFTPGo to archive both volumes consistently, then
+restarts it (including on backup failure). Restore both archives together using
+section 6 of `RESTORE.md`.
 
 ## Zulip setup
 
@@ -113,6 +185,7 @@ values and `SECRETS_email_password` to the Zulip environment, then recreate Zuli
   - Dumps PostgreSQL (`n8n-postgres`) & MariaDB (`vikunja-mariadb`).
   - Archives persistent Docker named volumes (`n8n_data`, `n8n_db_data`, `vikunja_files`, `vikunja_db_data`, `vaultwarden_data`, `nextcloud_aio_mastercontainer`) into portable tarballs (`$BACKUP_ROOT/$DATE/volumes/*.tgz`).
   - Supports optional off-host sync using Restic (`RESTIC_REPOSITORY`).
+- **SFTPGo (`backup.sh`)**: Archives `sftpgo_data` and `sftpgo_config` with the service stopped for a consistent snapshot.
 - **Restoration**:
   - Deploy the stack on any host using `docker-compose up -d`.
   - Extract volume archives or restore database dumps for n8n, Vikunja, and Vaultwarden.

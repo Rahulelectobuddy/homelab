@@ -48,12 +48,29 @@ VOLUMES=(
   # Includes uploads, configuration, certificates, secrets, and fresh DB dump.
   # Do not archive the live Zulip PostgreSQL data directory.
   "zulip_data"
+  "sftpgo_data"
+  "sftpgo_config"
 )
 
+# Stop SFTPGo while archiving both volumes for a consistent SQLite/files snapshot.
+# The EXIT trap also restarts it if an archive fails.
+SFTPGO_STOPPED=0
+restart_sftpgo() {
+  if [ "$SFTPGO_STOPPED" -eq 1 ]; then
+    docker compose start sftpgo
+  fi
+}
+trap restart_sftpgo EXIT
+
 # Resolve project volume name prefix
-COMPOSE_PROJECT_NAME=$(docker compose config --format json 2>/dev/null | grep -o '"name":"[^"]*"' | head -n1 | cut -d'"' -f4 || echo "homelab")
+COMPOSE_PROJECT_NAME=$(docker compose config | sed -n 's/^name: //p')
+: "${COMPOSE_PROJECT_NAME:?Could not resolve Compose project name}"
 
 for vol in "${VOLUMES[@]}"; do
+  if [ "$vol" = "sftpgo_data" ] && [ -n "$(docker compose ps --status running -q sftpgo)" ]; then
+    SFTPGO_STOPPED=1
+    docker compose stop sftpgo
+  fi
   FULL_VOL_NAME="${COMPOSE_PROJECT_NAME}_${vol}"
   if ! docker volume inspect "$FULL_VOL_NAME" >/dev/null 2>&1; then
     FULL_VOL_NAME="$vol"
@@ -70,6 +87,9 @@ for vol in "${VOLUMES[@]}"; do
     echo "--> Warning: Volume $FULL_VOL_NAME not found, skipping."
   fi
 done
+
+restart_sftpgo
+SFTPGO_STOPPED=0
 
 # Off-host Restic backup if configured
 if [ -n "${RESTIC_REPOSITORY:-}" ] && [ -n "${RESTIC_PASSWORD_FILE:-}" ]; then

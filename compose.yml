@@ -137,6 +137,35 @@ services:
       - "${VAULTWARDEN_PORT:-8088}:80"
     restart: unless-stopped
 
+  # =========================
+  # SFTPGo (Obsidian WebDAV storage)
+  # =========================
+  sftpgo:
+    image: drakkan/sftpgo:v2.7.6
+    environment:
+      TZ: Asia/Kolkata
+      SFTPGO_DATA_PROVIDER__DRIVER: sqlite
+      SFTPGO_DATA_PROVIDER__NAME: /var/lib/sftpgo/sftpgo.db
+      SFTPGO_DATA_PROVIDER__USERS_BASE_DIR: /srv/sftpgo/data
+      SFTPGO_WEBDAVD__BINDINGS__0__PORT: "10080"
+      SFTPGO_WEBDAVD__BINDINGS__0__ADDRESS: "0.0.0.0"
+      SFTPGO_WEBDAVD__CORS__ENABLED: "true"
+      SFTPGO_WEBDAVD__CORS__ALLOWED_ORIGINS: "app://obsidian,capacitor://localhost,http://localhost"
+      SFTPGO_WEBDAVD__CORS__ALLOWED_METHODS: "OPTIONS,GET,HEAD,POST,PUT,DELETE,MKCOL,PROPFIND,PROPPATCH,MOVE,COPY,LOCK,UNLOCK"
+      SFTPGO_WEBDAVD__CORS__ALLOWED_HEADERS: "*"
+      SFTPGO_WEBDAVD__CORS__EXPOSED_HEADERS: "DAV,Content-Length,Content-Type,ETag,Last-Modified,Location"
+      SFTPGO_WEBDAVD__CORS__ALLOW_CREDENTIALS: "true"
+    volumes:
+      # Vault files and application backups.
+      - sftpgo_data:/srv/sftpgo
+      # SQLite user/admin database, configuration, and SSH host keys.
+      - sftpgo_config:/var/lib/sftpgo
+    ports:
+      - "127.0.0.1:8089:8080"
+      - "0.0.0.0:10080:10080"
+      - "0.0.0.0:2022:2022"
+    restart: unless-stopped
+
   # Zulip starts with the rest of the stack; no .env is needed for Zulip.
   # Based on https://github.com/zulip/docker-zulip/blob/main/compose.yaml
   zulip-postgres:
@@ -235,6 +264,8 @@ volumes:
   nextcloud_aio_mastercontainer:
     name: nextcloud_aio_mastercontainer
   vaultwarden_data:
+  sftpgo_data:
+  sftpgo_config:
   zulip_data:
   zulip_db_data:
   zulip_rabbitmq_data:
