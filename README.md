@@ -6,7 +6,7 @@ Single Docker Compose deployment for **Nextcloud AIO**, **Vikunja**, **Vaultward
 
 - **Git repository = desired state**: Docker Compose file, backup/deploy scripts, and documentation.
 - **`/opt/homelab/.env`**: Secret configuration for services (never committed).
-- **Docker Named Volumes**: All persistent data is stored in isolated Docker named volumes (`postgres_data`, `vikunja_files`, `nextcloud_aio_mastercontainer`, `vaultwarden_data`, `paperless_data`, `paperless_media`, `paperless_redis_data`, `sftpgo_data`, `sftpgo_config`) without host-path dependencies.
+- **Docker Named Volumes**: All persistent data is stored in isolated Docker named volumes (`vikunja_files`, `vikunja_db_data`, `nextcloud_aio_mastercontainer`, `vaultwarden_data`, `paperless_data`, `paperless_media`, `paperless_db_data`, `paperless_redis_data`, `sftpgo_data`, `sftpgo_config`) without host-path dependencies.
 - **Out-of-the-box Deployment**: Cloned repo + `.env` file works on any Docker host without pre-creating host directories.
 
 ## Deployment
@@ -31,7 +31,7 @@ docker compose ps
 - **Nextcloud AIO**: Port `8080`
 - **Vikunja**: Port `3456`
 - **Vaultwarden**: Port `8088`
-- **Paperless-ngx**: Port `8000`
+- **Paperless-ngx**: Port `8010` (customizable via `PAPERLESS_PORT`)
 - **SFTPGo**: Admin `127.0.0.1:8089`, WebDAV `10080`, SFTP `2022`
 
 ## SFTPGo / Obsidian WebDAV setup
@@ -113,7 +113,7 @@ Paperless-ngx is an open-source document management system that transforms physi
 
 The Paperless-ngx stack is configured with:
 - **`paperless`**: Core application container running the web interface, workers, OCR engine (Tesseract), and document consumer (`ghcr.io/paperless-ngx/paperless-ngx:latest`).
-- **`postgres`**: Shared PostgreSQL database instance (`postgres:17-alpine`) providing isolated databases for Vikunja and Paperless-ngx.
+- **`paperless-postgres`**: Dedicated PostgreSQL database (`postgres:17-alpine`).
 - **`paperless-redis`**: Redis message broker (`redis:7-alpine`) for background task queues.
 
 ### Initial Setup & Creating Admin User
@@ -121,8 +121,8 @@ The Paperless-ngx stack is configured with:
 1. Start Paperless-ngx along with its dependencies:
    ```bash
    cd /opt/homelab
-   docker compose pull postgres paperless-redis paperless
-   docker compose up -d postgres paperless-redis paperless
+   docker compose pull paperless-postgres paperless-redis paperless
+   docker compose up -d paperless-postgres paperless-redis paperless
    ```
 
 2. Create your administrator account (superuser):
@@ -131,17 +131,12 @@ The Paperless-ngx stack is configured with:
    ```
    Follow the prompts to specify a username, email, and password.
 
-3. Access the Paperless-ngx web interface at `http://<SERVER_IP>:8000` (or `http://localhost:8000`) and log in.
-
-### Document Ingestion
-
-- **Web UI & Mobile**: Upload files directly via the browser or Paperless mobile apps.
-- **Email Ingestion**: In the web UI under **Settings > Mail**, configure incoming IMAP/POP3 connections to ingest attachments automatically.
+3. Access the Paperless-ngx web interface at `http://<SERVER_IP>:8010` (or `http://localhost:8010`) and log in.
 
 ### Remote Access via Reverse Proxy / Cloudflare Tunnel
 
 To route remote access through Cloudflare Tunnel:
-1. Route your hostname (e.g., `docs.example.com`) to `http://127.0.0.1:8000`.
+1. Route your hostname (e.g., `docs.example.com`) to `http://127.0.0.1:8010`.
 2. Update `.env` to include your public URL for CSRF protection:
    ```bash
    PAPERLESS_URL=https://docs.example.com
@@ -157,8 +152,8 @@ To route remote access through Cloudflare Tunnel:
   - Managed via Nextcloud AIO Web Interface (`https://<YOUR_SERVER_IP>:8080`).
   - Safely stops child containers, performs an encrypted/deduplicated Borg snapshot of database & files, and restarts containers automatically.
 - **Vikunja, Vaultwarden & Paperless-ngx (`backup.sh`)**:
-  - Dumps PostgreSQL databases (`vikunja`, `paperless`) directly from the shared `postgres` container.
-  - Archives persistent Docker named volumes (`postgres_data`, `vikunja_files`, `nextcloud_aio_mastercontainer`, `vaultwarden_data`, `paperless_data`, `paperless_media`) into portable tarballs (`$BACKUP_ROOT/$DATE/volumes/*.tgz`).
+  - Dumps PostgreSQL database (`paperless-postgres`) & MariaDB (`vikunja-mariadb`).
+  - Archives persistent Docker named volumes (`vikunja_files`, `vikunja_db_data`, `nextcloud_aio_mastercontainer`, `vaultwarden_data`, `paperless_data`, `paperless_media`, `paperless_db_data`) into portable tarballs (`$BACKUP_ROOT/$DATE/volumes/*.tgz`).
   - Supports optional off-host sync using Restic (`RESTIC_REPOSITORY`).
 - **SFTPGo (`backup.sh`)**: Archives `sftpgo_data` and `sftpgo_config` with the service stopped for a consistent snapshot.
 - **Restoration**:

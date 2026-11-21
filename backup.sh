@@ -16,23 +16,26 @@ if [ -f "$ROOT/.env" ]; then
   set +a
 fi
 
-# Database dumps: logical backups for database container
+# Database dumps: logical backups for database containers
 echo "==> Backing up databases (logical dumps)"
 
-echo "--> Vikunja PostgreSQL"
-docker compose exec -T postgres pg_dump -U vikunja -d vikunja | gzip > "$DUMP_DIR/vikunja.sql.gz"
+echo "--> Vikunja MariaDB"
+docker compose exec -T vikunja-mariadb sh -c \
+  'mariadb-dump -u root -p"$MYSQL_ROOT_PASSWORD" --single-transaction vikunja' \
+  | gzip > "$DUMP_DIR/vikunja.sql.gz"
 
 echo "--> Paperless PostgreSQL"
-docker compose exec -T postgres pg_dump -U paperless -d paperless | gzip > "$DUMP_DIR/paperless.sql.gz"
+docker compose exec -T paperless-postgres pg_dump -U paperless -d paperless | gzip > "$DUMP_DIR/paperless.sql.gz"
 
 echo "==> Backing up Docker persistent named volumes"
 VOLUMES=(
-  "postgres_data"
   "vikunja_files"
+  "vikunja_db_data"
   "nextcloud_aio_mastercontainer"
   "vaultwarden_data"
   "paperless_data"
   "paperless_media"
+  "paperless_db_data"
   "sftpgo_data"
   "sftpgo_config"
 )

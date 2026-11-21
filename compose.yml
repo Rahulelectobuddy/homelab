@@ -1,40 +1,39 @@
 services:
   # =========================
-  # PostgreSQL (Shared Database)
+  # Vikunja
   # =========================
-  postgres:
-    image: postgres:17-alpine
+  vikunja-mariadb:
+    image: mariadb:11
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_secret_change_me}
-      POSTGRES_DB: postgres
-      VIKUNJA_DB_PASSWORD: ${VIKUNJA_DB_PASSWORD:-vikunja_db_secret_change_me}
-      PAPERLESS_DB_PASSWORD: ${PAPERLESS_DB_PASSWORD:-paperless_db_secret_change_me}
+      MARIADB_ROOT_PASSWORD: ${VIKUNJA_DB_ROOT_PASSWORD:-vikunja_root_secret_change_me}
+      MYSQL_ROOT_PASSWORD: ${VIKUNJA_DB_ROOT_PASSWORD:-vikunja_root_secret_change_me}
+      MARIADB_DATABASE: vikunja
+      MYSQL_DATABASE: vikunja
+      MARIADB_USER: vikunja
+      MYSQL_USER: vikunja
+      MARIADB_PASSWORD: ${VIKUNJA_DB_PASSWORD:-vikunja_db_secret_change_me}
+      MYSQL_PASSWORD: ${VIKUNJA_DB_PASSWORD:-vikunja_db_secret_change_me}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./init-postgres.sh:/docker-entrypoint-initdb.d/init-postgres.sh:ro
+      - vikunja_db_data:/var/lib/mysql
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U postgres -d postgres" ]
+      test: [ "CMD-SHELL", "healthcheck.sh --connect --innodb_initialized" ]
       interval: 5s
       timeout: 5s
       retries: 10
       start_period: 30s
     restart: unless-stopped
 
-  # =========================
-  # Vikunja
-  # =========================
   vikunja:
     image: vikunja/vikunja:latest
     user: "0:0"
     depends_on:
-      postgres:
+      vikunja-mariadb:
         condition: service_healthy
     environment:
       VIKUNJA_SERVICE_PUBLICURL: ${VIKUNJA_PUBLIC_URL:-http://192.168.1.46:3456/}
-      VIKUNJA_DATABASE_TYPE: postgres
-      VIKUNJA_DATABASE_HOST: postgres
-      VIKUNJA_DATABASE_PORT: 5432
+      VIKUNJA_DATABASE_TYPE: mysql
+      VIKUNJA_DATABASE_HOST: vikunja-mariadb
+      VIKUNJA_DATABASE_PORT: 3306
       VIKUNJA_DATABASE_DATABASE: vikunja
       VIKUNJA_DATABASE_USER: vikunja
       VIKUNJA_DATABASE_PASSWORD: ${VIKUNJA_DB_PASSWORD:-vikunja_db_secret_change_me}
@@ -118,17 +117,33 @@ services:
     volumes:
       - paperless_redis_data:/data
 
+  paperless-postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: paperless
+      POSTGRES_USER: paperless
+      POSTGRES_PASSWORD: ${PAPERLESS_DB_PASSWORD:-paperless_db_secret_change_me}
+    volumes:
+      - paperless_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U paperless -d paperless" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
   paperless:
     image: ghcr.io/paperless-ngx/paperless-ngx:latest
     restart: unless-stopped
     depends_on:
-      postgres:
+      paperless-postgres:
         condition: service_healthy
       paperless-redis:
         condition: service_started
     environment:
       PAPERLESS_REDIS: redis://paperless-redis:6379
-      PAPERLESS_DBHOST: postgres
+      PAPERLESS_DBHOST: paperless-postgres
       PAPERLESS_DBPORT: 5432
       PAPERLESS_DBNAME: paperless
       PAPERLESS_DBUSER: paperless
@@ -136,15 +151,15 @@ services:
       PAPERLESS_SECRET_KEY: ${PAPERLESS_SECRET_KEY:-paperless_secret_key_change_me_32_chars}
       PAPERLESS_TIME_ZONE: Asia/Kolkata
       PAPERLESS_OCR_LANGUAGE: ${PAPERLESS_OCR_LANGUAGE:-eng}
-      PAPERLESS_URL: ${PAPERLESS_URL:-http://localhost:8000}
+      PAPERLESS_URL: ${PAPERLESS_URL:-http://localhost:8010}
     volumes:
       - paperless_data:/usr/src/paperless/data
       - paperless_media:/usr/src/paperless/media
     ports:
-      - "${PAPERLESS_PORT:-8000}:8000"
+      - "${PAPERLESS_PORT:-8010}:8000"
 
 volumes:
-  postgres_data:
+  vikunja_db_data:
   vikunja_files:
   nextcloud_aio_mastercontainer:
     name: nextcloud_aio_mastercontainer
@@ -153,4 +168,5 @@ volumes:
   sftpgo_config:
   paperless_data:
   paperless_media:
+  paperless_db_data:
   paperless_redis_data:
