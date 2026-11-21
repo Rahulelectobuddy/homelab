@@ -16,38 +16,23 @@ if [ -f "$ROOT/.env" ]; then
   set +a
 fi
 
-# Database dumps: logical backups for database containers
+# Database dumps: logical backups for database container
 echo "==> Backing up databases (logical dumps)"
 
-echo "--> n8n PostgreSQL"
-docker compose exec -T n8n-postgres pg_dump -U n8n -d n8n | gzip > "$DUMP_DIR/n8n.sql.gz"
+echo "--> Vikunja PostgreSQL"
+docker compose exec -T postgres pg_dump -U vikunja -d vikunja | gzip > "$DUMP_DIR/vikunja.sql.gz"
 
-echo "--> Vikunja MariaDB"
-docker compose exec -T vikunja-mariadb sh -c \
-  'mariadb-dump -u root -p"$MYSQL_ROOT_PASSWORD" --single-transaction vikunja' \
-  | gzip > "$DUMP_DIR/vikunja.sql.gz"
-
-# Persistent Docker volume archives
-ZULIP_RUNNING=""
-if docker compose config --services | grep -qx zulip; then
-  ZULIP_RUNNING=$(docker compose ps --status running -q zulip)
-fi
-if [ -n "$ZULIP_RUNNING" ]; then
-  echo "--> Zulip PostgreSQL (dump into zulip_data/backups)"
-  docker compose exec -T zulip /sbin/entrypoint.sh app:backup
-fi
+echo "--> Paperless PostgreSQL"
+docker compose exec -T postgres pg_dump -U paperless -d paperless | gzip > "$DUMP_DIR/paperless.sql.gz"
 
 echo "==> Backing up Docker persistent named volumes"
 VOLUMES=(
-  "n8n_data"
-  "n8n_db_data"
+  "postgres_data"
   "vikunja_files"
-  "vikunja_db_data"
   "nextcloud_aio_mastercontainer"
   "vaultwarden_data"
-  # Includes uploads, configuration, certificates, secrets, and fresh DB dump.
-  # Do not archive the live Zulip PostgreSQL data directory.
-  "zulip_data"
+  "paperless_data"
+  "paperless_media"
   "sftpgo_data"
   "sftpgo_config"
 )
@@ -103,7 +88,3 @@ if [ -n "${RESTIC_REPOSITORY:-}" ] && [ -n "${RESTIC_PASSWORD_FILE:-}" ]; then
 fi
 
 echo "==> Backup completed successfully: $DATE"
-
-
-
-

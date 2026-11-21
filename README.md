@@ -1,12 +1,12 @@
 # Homelab Infrastructure
 
-Single Docker Compose deployment for **Nextcloud AIO**, **Vikunja**, **n8n**, **Vaultwarden** (Bitwarden-compatible Password Manager), **Zulip**, and **SFTPGo** for Obsidian WebDAV sync.
+Single Docker Compose deployment for **Nextcloud AIO**, **Vikunja**, **Vaultwarden** (Bitwarden-compatible Password Manager), **Paperless-ngx** (Document Management System), and **SFTPGo** for Obsidian WebDAV sync.
 
 ## Design
 
 - **Git repository = desired state**: Docker Compose file, backup/deploy scripts, and documentation.
-- **`/opt/homelab/.env`**: Secret configuration for existing services (never committed). Zulip settings and generated credentials are inline in `compose.yml`, which must be kept private.
-- **Docker Named Volumes**: All persistent data is stored in isolated Docker named volumes (`n8n_data`, `n8n_db_data`, `vikunja_files`, `vikunja_db_data`, `nextcloud_aio_mastercontainer`, `vaultwarden_data`, `sftpgo_data`, `sftpgo_config`) without host-path dependencies.
+- **`/opt/homelab/.env`**: Secret configuration for services (never committed).
+- **Docker Named Volumes**: All persistent data is stored in isolated Docker named volumes (`postgres_data`, `vikunja_files`, `nextcloud_aio_mastercontainer`, `vaultwarden_data`, `paperless_data`, `paperless_media`, `paperless_redis_data`, `sftpgo_data`, `sftpgo_config`) without host-path dependencies.
 - **Out-of-the-box Deployment**: Cloned repo + `.env` file works on any Docker host without pre-creating host directories.
 
 ## Deployment
@@ -30,10 +30,9 @@ docker compose ps
 
 - **Nextcloud AIO**: Port `8080`
 - **Vikunja**: Port `3456`
-- **n8n**: Port `5678`
 - **Vaultwarden**: Port `8088`
+- **Paperless-ngx**: Port `8000`
 - **SFTPGo**: Admin `127.0.0.1:8089`, WebDAV `10080`, SFTP `2022`
-- **Zulip**: HTTP origin `127.0.0.1:8090`, public HTTPS via Cloudflare Tunnel
 
 ## SFTPGo / Obsidian WebDAV setup
 
@@ -106,91 +105,64 @@ SFTPGo host ports and bind addresses are hardcoded in `compose.yml`.
 restarts it (including on backup failure). Restore both archives together using
 section 6 of `RESTORE.md`.
 
-## Zulip setup
+## Paperless-ngx setup
 
-Zulip uses the official `ghcr.io/zulip/zulip-server:12.3-0` image with dedicated
-PostgreSQL, RabbitMQ, Redis, and authenticated Memcached services. All five
-start with the stack, without profiles or Zulip `.env` entries. Five independent
-random credentials are defined in `x-zulip-credentials` and shared using YAML
-anchors. Preserve these values on redeployment and recovery; changing the
-PostgreSQL password requires also updating the initialized database role.
-Allow at least 2 GB of available RAM for Zulip and its dependencies.
+Paperless-ngx is an open-source document management system that transforms physical and digital documents into searchable, organized archives using OCR, tagging, and machine-learning classification.
 
-1. Zulip is configured for `talk.cypherlifeos.space`, administrator
-   `rahulyugalgarg@gmail.com`, and local email files instead of SMTP.
-   Keep `compose.yml` private because it contains the generated passwords.
-2. In the host's Cloudflare Tunnel configuration, route
-   `talk.cypherlifeos.space` to **`http://127.0.0.1:8090`**. A local ingress rule
-   looks like this (place before the existing catch-all rule):
+### Components
 
-   ```yaml
-   - hostname: talk.cypherlifeos.space
-     service: http://127.0.0.1:8090
-   ```
+The Paperless-ngx stack is configured with:
+- **`paperless`**: Core application container running the web interface, workers, OCR engine (Tesseract), and document consumer (`ghcr.io/paperless-ngx/paperless-ngx:latest`).
+- **`postgres`**: Shared PostgreSQL database instance (`postgres:17-alpine`) providing isolated databases for Vikunja and Paperless-ngx.
+- **`paperless-redis`**: Redis message broker (`redis:7-alpine`) for background task queues.
 
-   Configure the public DNS route and keep public requests on HTTPS. Zulip's
-   origin is bound to host loopback. `TRUST_GATEWAY_IP: "true"` trusts the
-   Docker gateway used by host-based cloudflared, allowing its forwarded HTTPS
-   and client IP headers. See the official
-   [reverse proxy configuration](https://zulip.readthedocs.io/projects/docker/en/latest/how-to/compose-ssl.html#deploying-behind-a-reverse-proxy).
-3. Initialize and start Zulip on the homelab host:
+### Initial Setup & Creating Admin User
 
+1. Start Paperless-ngx along with its dependencies:
    ```bash
    cd /opt/homelab
-   docker compose config --quiet
-   docker compose pull zulip zulip-postgres zulip-memcached zulip-rabbitmq zulip-redis
-   docker compose run --rm zulip app:init
-   docker compose up -d --wait zulip
-   docker compose exec -T -u zulip zulip \
-     /home/zulip/deployments/current/manage.py generate_realm_creation_link
+   docker compose pull postgres paperless-redis paperless
+   docker compose up -d postgres paperless-redis paperless
    ```
 
-   Open the generated link to create your organization and first administrator.
-   Normal updates continue through `deploy.sh` and the existing deployment workflow.
-   See the official [first-run instructions](https://zulip.readthedocs.io/projects/docker/en/latest/how-to/compose-getting-started.html).
+2. Create your administrator account (superuser):
+   ```bash
+   docker compose exec -it paperless python3 manage.py createsuperuser
+   ```
+   Follow the prompts to specify a username, email, and password.
 
-Zulip persists uploads, configuration, and secrets in `zulip_data`; its database,
-queue, and Redis use `zulip_db_data`, `zulip_rabbitmq_data`, and `zulip_redis_data`.
-`backup.sh` refreshes Zulip's logical database dump inside `zulip_data/backups`
-when Zulip is running, then archives `zulip_data.tgz`. Backups contain secrets;
-store them securely. Zulip also creates daily database dumps in this volume;
-monitor their storage usage. Use the Zulip recovery section in `RESTORE.md`
-instead of copying a running database volume.
+3. Access the Paperless-ngx web interface at `http://<SERVER_IP>:8000` (or `http://localhost:8000`) and log in.
 
-### Running without SMTP
+### Document Ingestion
 
-The file email backend is already configured directly in `compose.yml`.
-No SMTP credentials are required.
-The file backend writes outgoing emails to `/var/log/zulip/emails` inside the
-container. Chat works, but invitations, verification links, and password resets
-must be retrieved manually; email notifications are not delivered to inboxes.
-Retrieve email files with:
+- **Web UI & Mobile**: Upload files directly via the browser or Paperless mobile apps.
+- **Email Ingestion**: In the web UI under **Settings > Mail**, configure incoming IMAP/POP3 connections to ingest attachments automatically.
 
-```bash
-docker compose exec -u zulip zulip ls -lt /var/log/zulip/emails
-docker compose exec -u zulip zulip cat /var/log/zulip/emails/<FILENAME>
-```
+### Remote Access via Reverse Proxy / Cloudflare Tunnel
 
-These files contain private account links and are temporary container data.
-To enable SMTP later, change `SETTING_EMAIL_BACKEND` to
-`django.core.mail.backends.smtp.EmailBackend`, add the SMTP `SETTING_EMAIL_*`
-values and `SECRETS_email_password` to the Zulip environment, then recreate Zulip. See [Zulip's documented file backend](https://zulip.readthedocs.io/en/stable/production/email.html#logging-outgoing-email-to-a-file-for-prototyping).
+To route remote access through Cloudflare Tunnel:
+1. Route your hostname (e.g., `docs.example.com`) to `http://127.0.0.1:8000`.
+2. Update `.env` to include your public URL for CSRF protection:
+   ```bash
+   PAPERLESS_URL=https://docs.example.com
+   ```
+3. Restart Paperless:
+   ```bash
+   docker compose up -d paperless
+   ```
 
 ## Backup & Restoration
 
 - **Nextcloud AIO (Built-in BorgBackup)**:
   - Managed via Nextcloud AIO Web Interface (`https://<YOUR_SERVER_IP>:8080`).
   - Safely stops child containers, performs an encrypted/deduplicated Borg snapshot of database & files, and restarts containers automatically.
-- **n8n, Vikunja & Vaultwarden (`backup.sh`)**:
-  - Dumps PostgreSQL (`n8n-postgres`) & MariaDB (`vikunja-mariadb`).
-  - Archives persistent Docker named volumes (`n8n_data`, `n8n_db_data`, `vikunja_files`, `vikunja_db_data`, `vaultwarden_data`, `nextcloud_aio_mastercontainer`) into portable tarballs (`$BACKUP_ROOT/$DATE/volumes/*.tgz`).
+- **Vikunja, Vaultwarden & Paperless-ngx (`backup.sh`)**:
+  - Dumps PostgreSQL databases (`vikunja`, `paperless`) directly from the shared `postgres` container.
+  - Archives persistent Docker named volumes (`postgres_data`, `vikunja_files`, `nextcloud_aio_mastercontainer`, `vaultwarden_data`, `paperless_data`, `paperless_media`) into portable tarballs (`$BACKUP_ROOT/$DATE/volumes/*.tgz`).
   - Supports optional off-host sync using Restic (`RESTIC_REPOSITORY`).
 - **SFTPGo (`backup.sh`)**: Archives `sftpgo_data` and `sftpgo_config` with the service stopped for a consistent snapshot.
 - **Restoration**:
-  - Deploy the stack on any host using `docker-compose up -d`.
-  - Extract volume archives or restore database dumps for n8n, Vikunja, and Vaultwarden.
+  - Deploy the stack on any host using `docker compose up -d`.
+  - Extract volume archives or restore database dumps for Vikunja, Vaultwarden, and Paperless-ngx.
   - Nextcloud AIO is restored via the AIO Web Interface using your BorgBackup passphrase & archive path.
-
-
-
-
+  - Follow `RESTORE.md` for step-by-step disaster recovery instructions.
